@@ -113,6 +113,5 @@ def main():
 if __name__ == '__main__':
   main()
 
-# Check into github
 # Create persistence by week, so as to see variance over time
 # Create clues to automatically categorize
