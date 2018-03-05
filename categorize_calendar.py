@@ -1,4 +1,3 @@
-
 from __future__ import print_function
 import httplib2
 import os
@@ -27,6 +26,12 @@ SCOPES = 'https://www.googleapis.com/auth/calendar.readonly'
 CLIENT_SECRET_FILE = '/Users/vinithra/.credentials/client_secret.json'
 APPLICATION_NAME = 'Google Calendar API Python Quickstart'
 
+START_MONTH = 3
+START_DATE = 12
+END_MONTH = 3
+END_DATE = 17
+YEAR = 2018
+FILENAME = '/Users/vinithra/code/gcal/cloudera_cal_metadata.csv'
 
 def get_credentials():
   """Gets valid user credentials from storage.
@@ -57,53 +62,86 @@ def get_credentials():
   return credentials
 
 def get_time(month, date):
-  """Get the datetime version given a month and date in 2017
+  """Get the datetime version given a month and date in specified year
   Returns: datetime
   """
-  return datetime.datetime(2017, month, date).isoformat() + 'Z'
+  return datetime.datetime(YEAR, month, date).isoformat() + 'Z'
 
 def get_timestamp(time_unicode):
-  """Gets the timestamp from a string representation"""
+  """Gets the timestamp from a string representation
+  """
   return parse(time_unicode)
 
 def get_events(service):
+  """Get the events using the Google calendar API and categorize them
+  """
   # The start and end dates for the period we care about
-  start_week = get_time(8, 21)
-  end_week = get_time(8, 26) # non-inclusive
+  start_week = get_time(START_MONTH, START_DATE)
+  end_week = get_time(END_MONTH, END_DATE) # non-inclusive
 
   # Get events from Google API
+  # TODO: Currently only returning small number of events for testing purposes
   eventsResult = service.events().list(
     calendarId='primary', timeMin=start_week, timeMax=end_week, singleEvents=True,
-    orderBy='startTime', maxResults=3).execute()
+    orderBy='startTime').execute()
   events = eventsResult.get('items', [])
+  categorize_events(events)
 
-  catg_count = {}
+def get_time_mins(event):
+  """Get the string version of the time in minutes of an event
+  """
+  time = get_timestamp(event['end']['dateTime']) - get_timestamp(event['start']['dateTime'])
+  time_mins = time.total_seconds() / 60
+  time_mins_string = '{:.0f}'.format(time_mins)
+  return time_mins_string
+
+def categorize_events(events):
+  """Get input on categories of events and write them to file
+  """
+  # catg_count = {}
+  file_object = open(FILENAME, "a")
 
   # Parse the events and categorize the time taken
   if not events:
     print('No upcoming events found.')
   for event in events:
-    time = get_timestamp(event['end']['dateTime']) - get_timestamp(event['start']['dateTime'])
-    time_mins = time.total_seconds() / 60
-    
+    time_mins = get_time_mins(event)
+
     categories = input(str(time_mins) + ' mins: ' + event['summary'] + ': ')
-    for category in categories.split(','):
-      if category == 'i':
-          # Some events can be ignored
-          continue
-      elif category in catg_count:
-          catg_count[category] = catg_count[category] + time_mins
-      else:
-          catg_count[category] = time_mins
+    write_data(file_object, event, time_mins, categories)
+
+  file_object.close()
+
+def write_data(file_object, event, time_mins, categories):
+  """Write data to file according to schema:
+  Event_name time_mins comma_delimited_categories
+  except where category implies to be ignored
+  """
+  for category in categories.split(','):
+    if category == 'i':
+      # Some events can be ignored
+      return
+
+  file_object.write(event['summary'] + '\t' +
+                    event['end']['dateTime'] + '\t' +
+                    event['start']['dateTime'] + '\t' +
+                    time_mins + '\t' +
+                    categories + '\n')
+
+def print_categories(cateogries, time_mins):
+  # Accept multiple categories
+  for category in categories.split(','):
+    if category == 'i':
+      # Some events can be ignored
+      continue
+    elif category in catg_count:
+      catg_count[category] = catg_count[category] + time_mins
+    else:
+      catg_count[category] = time_mins
 
   print(catg_count)
 
 def main():
-  """Shows basic usage of the Google Calendar API.
-
-  Creates a Google Calendar API service object and outputs a list of the next
-  10 events on the user's calendar.
-  """
   credentials = get_credentials()
   http = credentials.authorize(httplib2.Http())
   service = discovery.build('calendar', 'v3', http=http)
@@ -113,5 +151,5 @@ def main():
 if __name__ == '__main__':
   main()
 
-# Create persistence by week, so as to see variance over time
-# Create clues to automatically categorize
+# Pick up categories from past events. Can you figure out if they are recurring
+# Process metadata
